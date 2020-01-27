@@ -4,7 +4,6 @@ import PIL
 import torch
 import torch.nn as nn
 import torchvision
-import torchsnooper
 
 
 class RFC(nn.Module):
@@ -19,6 +18,7 @@ class RFC(nn.Module):
             self.layer3 = nn.Conv2d(256, 64, 4, stride=4)
             self.layer4 = nn.Conv2d(512, 64, 2, stride=2)
             self.layer5 = nn.Conv2d(512, 64, 1)
+            self.upsample = nn.ConvTranspose2d(64, 64, 16, stride=16)
 
         elif resolution == 32:
             self.layer1 = nn.Conv2d(64, 64, 8, stride=8)
@@ -26,26 +26,38 @@ class RFC(nn.Module):
             self.layer3 = nn.Conv2d(256, 64, 2, stride=2)
             self.layer4 = nn.Conv2d(512, 64, 1)
             self.layer5 = nn.ConvTranspose2d(512, 64, 2, stride=2)
+            self.upsample = nn.ConvTranspose2d(64, 64, 8, stride=8)
+
         elif resolution == 64:
             self.layer1 = nn.Conv2d(64, 64, 4, stride=4)
             self.layer2 = nn.Conv2d(128, 64, 2, stride=2)
             self.layer3 = nn.Conv2d(256, 64, 1)
             self.layer4 = nn.ConvTranspose2d(512, 64, 2, stride=2)
             self.layer5 = nn.ConvTranspose2d(512, 64, 4, stride=4)
+            self.upsample = nn.ConvTranspose2d(64, 64, 4, stride=4)
+
         elif resolution == 128:
             self.layer1 = nn.Conv2d(64, 64, 2, stride=2)
             self.layer2 = nn.Conv2d(128, 64, 1)
             self.layer3 = nn.ConvTranspose2d(256, 64, 2, stride=2)
             self.layer4 = nn.ConvTranspose2d(512, 64, 4, stride=4)
             self.layer5 = nn.ConvTranspose2d(512, 64, 8, stride=8)
+            self.upsample = nn.ConvTranspose2d(64, 64, 2, stride=2)
+
         elif resolution == 256:
             self.layer1 = nn.Conv2d(64, 64, 1)
             self.layer2 = nn.ConvTranspose2d(128, 64, 2, stride=2)
             self.layer3 = nn.ConvTranspose2d(256, 64, 4, stride=4)
             self.layer4 = nn.ConvTranspose2d(512, 64, 8, stride=8)
             self.layer5 = nn.ConvTranspose2d(512, 64, 16, stride=16)
+            self.upsample = nn.ConvTranspose2d(64, 64, 1, stride=1)
+
         else:
             raise ValueError('resolution should be in [16, 32, 64, 128, 256]')
+        self.conv_out = nn.Conv2d(320, 64, 1)
+        self.bn = nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True)
+        self.relu = nn.ReLU(inplace=True)
+
 
     def forward(self, feature1, feature2, feature3, feature4, feature5):
         feature1 = self.layer1(feature1)
@@ -54,7 +66,12 @@ class RFC(nn.Module):
         feature4 = self.layer4(feature4)
         feature5 = self.layer5(feature5)
         feature = torch.cat([feature1, feature2, feature3, feature4, feature5], 1)
-
+        feature = self.conv_out(feature)
+        feature = self.bn(feature)
+        feature = self.relu(feature)
+        feature = self.upsample(feature)
+        # Upsample(deconvolution) layer was placed after RFC block in original paper, but for convenience
+        # I put it here.
         return feature
 
 
@@ -121,12 +138,27 @@ class Amulet(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        self.rfc1 = RFC(resolution=16)
-        self.rfc2 = RFC(resolution=32)
+        self.rfc1 = RFC(resolution=256)
+        self.rfc2 = RFC(resolution=128)
         self.rfc3 = RFC(resolution=64)
-        self.rfc4 = RFC(resolution=128)
-        self.rfc5 = RFC(resolution=256)
+        self.rfc4 = RFC(resolution=32)
+        self.rfc5 = RFC(resolution=16)
 
+        self.catconv1 = nn.Conv2d(64, 2, 3, padding=1)
+        self.catconv2 = nn.Conv2d(66, 2, 3, padding=1)
+        self.catconv3 = nn.Conv2d(66, 2, 3, padding=1)
+        self.catconv4 = nn.Conv2d(66, 2, 3, padding=1)
+        self.catdeconv = nn.ConvTranspose2d(66, 2, 3, padding=1)
+
+        self.out_conv = nn.Sequential(
+            nn.Conv2d(10, 64, 1),
+            nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 2, 3, padding=1)
+        )
         self.vgg16_weight_init()
         # print('model initialization complete')
 
@@ -141,7 +173,23 @@ class Amulet(nn.Module):
         rfc3 = self.rfc3(feature1, feature2, feature3, feature4, feature5)
         rfc4 = self.rfc4(feature1, feature2, feature3, feature4, feature5)
         rfc5 = self.rfc5(feature1, feature2, feature3, feature4, feature5)
-        #TODO: complete remaining part of Amulet.
+        rfc5 = self.catconv1(rfc5)
+        output1 = rfc5
+        cat1 = torch.cat([rfc5, rfc4], 1)
+        cat1 = self.catconv2(cat1)
+        output2 = cat1
+        cat2 = torch.cat([cat1, rfc3], 1)
+        cat2 = self.catconv3(cat2)
+        output3 = cat2
+        cat3 = torch.cat([cat2, rfc2], 1)
+        cat3 = self.catconv4(cat3)
+        output4 = cat3
+        cat4 = torch.cat([cat3, rfc1], 1)
+        cat4 = self.catdeconv(cat4)
+        output5 = cat4
+        cat = torch.cat([output1, output2, output3, output4, output5], 1)
+        output = self.out_conv(cat)
+        return output, output1, output2, output3, output4, output5
 
     def vgg16_weight_init(self):
         vgg16 = torchvision.models.vgg16_bn(pretrained=True)
@@ -162,7 +210,7 @@ class Amulet(nn.Module):
                 layer_2.bias.data = layer_1.bias.data
 
 
-def test():
+if __name__ == '__main__':
     testnet = Amulet()
     img = PIL.Image.open('test.jpg', 'r')
     img = img.resize((256, 256))
@@ -171,7 +219,3 @@ def test():
     img = np.transpose(img, (0, 3, 1, 2))
     img = torch.from_numpy(img).float()
     outputs = testnet.forward(img)
-
-
-if __name__ == '__main__':
-    test()
