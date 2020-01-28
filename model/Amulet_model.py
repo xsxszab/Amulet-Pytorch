@@ -71,7 +71,7 @@ class RFC(nn.Module):
         feature = self.relu(feature)
         feature = self.upsample(feature)
         # Upsample(deconvolution) layer was placed after RFC block in original paper, but for convenience
-        # I put it here.
+        # I just put it here.
         return feature
 
 
@@ -196,8 +196,7 @@ class Amulet(nn.Module):
         features = list(self.conv1.children())
         features.extend(list(self.conv2.children()))
         features.extend(list(self.conv3.children()))
-        features.extend(list(self.conv4.children())
-                        )
+        features.extend(list(self.conv4.children()))
         features.extend(list(self.conv5.children()))
         features = nn.Sequential(*features)
 

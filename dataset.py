@@ -50,12 +50,12 @@ class TrainData(data.Dataset):
         """return next raw image and corresponding ground truth map"""
         img_path = self.input_names[index]
         img = Image.open(img_path, 'r')
-        img = img.resize((224, 224))
+        img = img.resize((256, 256))
         img = np.array(img, dtype=np.uint8)
 
         gt_path = self.gt_names[index]
         gt = Image.open(gt_path, 'r')
-        gt = gt.resize((224, 224))
+        gt = gt.resize((256, 256))
         gt = np.array(gt, dtype=np.uint32)
         gt[gt != 0] = 1
 
@@ -93,7 +93,7 @@ class TestData(data.Dataset):
         super().__init__()
         self.mean = np.array([0.485, 0.456, 0.406])
         self.std = np.array([0.229, 0.224, 0.225])
-        self.size = (224, 224)
+        self.size = (256, 256)
         input_path = path + 'raw/'
         self.transform_flag = transform
         self.names = os.listdir(input_path)
