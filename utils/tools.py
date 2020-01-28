@@ -130,6 +130,17 @@ def saveimg(img ,save_path, name, save_type='png'):
     full_path = os.path.join(save_path, full_name)
     plt.imsave(full_path, img, cmap='gray')
 
+
+def get_pred(img):
+    """get 2D saliency prediction from two-channel output saliency image(foreground channel and background channel)
+
+        :param img: tensor with shape [batch_size, 2, 256, 256]
+    """
+    img = img.exp()
+    sal = img[:, 0, None, :, :] / (img[:, 0, None, :, :] + img[:, 1, None, :, :])
+    return sal
+
+
 def test():
     """test get_mae and get_f_measure"""
     np.random.seed(100)
@@ -141,6 +152,7 @@ def test():
     print('f measure:', F_measure)
     print('MAE:', MAE)
     print('test done')
+
 
 if __name__ == '__main__':
     test()

@@ -17,16 +17,7 @@ from model.Amulet_model import Amulet  # Amulet network
 from dataset import TrainData
 from utils.tools import get_mae  # get MAE
 from utils.tools import get_f_measure  # get adaptive f measure
-
-
-def criterion(img, gt):
-    """get loss from two-channel output saliency image(foreground channel and background channel)
-
-        :param img: tensor with shape [batch_size, 2, 256, 256]
-        :param gt: tensor with shape [batch_size, 1, 256, 256]
-    """
-    # TODO: complete loss part
-    return None
+from utils.tools import get_pred  # get saliency from two channels prediction map
 
 
 def main(args):
@@ -91,7 +82,14 @@ def main(args):
             inputs = Variable(img)  # CPU version
             gt = Variable(gt.unsqueeze(1))  # CPU version
             output, output1, output2, output3, output4, output5 = model.forward(inputs)
+            output = get_pred(output)
+            output1 = get_pred(output1)
+            output2 = get_pred(output2)
+            output3 = get_pred(output3)
+            output4 = get_pred(output4)
+            output5 = get_pred(output5)
 
+            criterion = nn.BCELoss()
             loss = criterion(output, gt) + criterion(output1, gt) +\
                 criterion(output2, gt) + criterion(output3, gt) +\
                 criterion(output4, gt) + criterion(output5, gt)
