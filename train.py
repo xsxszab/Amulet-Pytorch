@@ -21,7 +21,7 @@ from utils.tools import get_pred  # get saliency from two channels prediction ma
 
 
 def main(args):
-    """main function for training DHS net"""
+    """main function for training Amulet net"""
 
     # print(args) # uncomment to test arg inputs
     bsize = args.batch_size
@@ -96,7 +96,6 @@ def main(args):
             model.zero_grad()
             loss.backward()
             optimizer.step()
-
             train_loss.append(round(float(loss.data.cpu()), 3))
             title = '{} Epoch {}/{}'.format('Training',
                                             epoch, args.epochs)
@@ -117,7 +116,8 @@ def main(args):
             for img, gt in val_loader:
                 # inputs = Variable(img).cuda()  # GPU version
                 inputs = Variable(img)  # CPU version
-                _, _, _, _, output = model.forward(inputs)
+                _, _, _, _, _, output = model.forward(inputs)
+                output = get_pred(output)
                 out = output.data.cpu().numpy()
                 pred_list.extend(out)
                 gt = gt.numpy()
